@@ -34,7 +34,7 @@
 * **setPixelPerFrame** - Window shift per frame, px  (Optional, default 15px)
 * **setDelayBetweenFrames** - Time between frames, ms)  (Optional, default 20ms)
 
-## Example
+## Code
 
 ```php
 use Visavi\Captcha\PhraseBuilder;

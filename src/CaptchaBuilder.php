@@ -255,7 +255,7 @@ class CaptchaBuilder
         static $params;
 
         if (! $params) {
-            $params['font'] = $this->font ?? __DIR__ . '/fonts/' . rand(0, 6) . '.ttf';
+            $params['font'] = $this->font ?? __DIR__ . '/../fonts/' . rand(0, 6) . '.ttf';
             $params['size'] = $this->width / max(strlen($this->phrase), 4);
 
             $box = imagettfbbox($params['size'], 0, $params['font'], $this->phrase);

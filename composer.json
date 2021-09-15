@@ -1,0 +1,24 @@
+{
+  "name": "visavi/captcha",
+  "description": "Animated captcha generator",
+  "keywords": ["captcha", "antispam", "antibot"],
+  "homepage": "https://visavi.net",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Alexander Grigorev",
+      "email": "admin@visavi.net",
+      "homepage": "https://visavi.net"
+    }
+  ],
+  "require": {
+    "php": ">=7.3.0",
+    "ext-gd": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "Visavi\\Captcha\\": "src/"
+    }
+  },
+  "minimum-stability": "stable"
+}

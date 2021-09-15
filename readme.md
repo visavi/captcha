@@ -5,6 +5,23 @@
 [![Latest Unstable Version](https://poser.pugx.org/visavi/captcha/v/unstable)](https://packagist.org/packages/visavi/captcha)
 [![License](https://poser.pugx.org/visavi/captcha/license)](https://packagist.org/packages/visavi/captcha)
 
+## Examples
+
+### Default
+![example1](examples/captcha1.gif)
+![example2](examples/captcha2.gif)
+![example3](examples/captcha3.gif)
+
+### Advanced
+![example4](examples/captcha4.gif)
+![example5](examples/captcha5.gif)
+![example6](examples/captcha6.gif)
+
+### Mini
+![example7](examples/captcha7.gif)
+![example8](examples/captcha8.gif)
+![example9](examples/captcha9.gif)
+
 ## Methods
 
 * **setPhrase** - Phrase (Required)

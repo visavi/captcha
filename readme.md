@@ -45,7 +45,7 @@ $_SESSION['captcha'] = $captcha->getPhrase();
 return $captcha->render();
 ```
 
-### Code Advanced
+### Code advanced
 
 ```php
 header('Content-Type: image/gif');

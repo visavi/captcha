@@ -16,7 +16,7 @@ class PhraseBuilder
      */
     public function getPhrase(
         int $length = 6,
-        string $characters = 'abcdefghijklmnpqrstuvwxyz123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        string $characters = 'abcdefghijklmnpqrstuvwxyz123456789'
     ): string {
         $phrase = '';
         $charactersLength = strlen($characters);

@@ -56,18 +56,24 @@ class CaptchaBuilder
      */
     protected $delayBetweenFrames = 20;
 
-    /**
-     * Set phrase
-     *
-     * @param string $phrase
-     *
-     * @return $this
-     */
-    public function setPhrase(string $phrase): self
+    public function __construct($phrase = null)
     {
-        $this->phrase = $phrase;
+        if ($phrase) {
+            $this->phrase = $phrase;
+        } else {
+            $phraseBuilder = new PhraseBuilder();
+            $this->phrase = $phraseBuilder->getPhrase(rand(4, 6));
+        }
+    }
 
-        return $this;
+    /**
+     * Get phrase
+     *
+     * @return string
+     */
+    public function getPhrase(): string
+    {
+        return $this->phrase;
     }
 
     /**
@@ -256,14 +262,15 @@ class CaptchaBuilder
 
         if (! $params) {
             $params['font'] = $this->font ?? __DIR__ . '/../fonts/' . rand(0, 6) . '.ttf';
-            $params['size'] = $this->width / max(strlen($this->phrase), 4);
+            $params['size'] = $this->width / max(strlen($this->phrase), 5);
 
             $box = imagettfbbox($params['size'], 0, $params['font'], $this->phrase);
+
             $params['textWidth']  = $box[2] - $box[0];
-            $params['textHeight'] = $box[1] - $box[7];
+            $params['textHeight'] = abs($box[7] + $box[1]);
 
             $params['x'] = (int) (($this->width - $params['textWidth']) / 2);
-            $params['y'] = (int) (($this->height - $params['textHeight']) / 2 + $params['size']);
+            $params['y'] = (int) (($this->height + $params['textHeight']) / 2);
 
             $params['textColor'] = $this->textColor ?? [rand(0, 150), rand(0, 150), rand(0, 150)];
             $params['backgroundColor'] = $this->backgroundColor ?? [rand(200, 255), rand(200, 255), rand(200, 255)];

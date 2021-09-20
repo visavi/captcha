@@ -24,7 +24,7 @@
 
 ## Methods
 
-* **setPhrase** - Phrase (Required)
+* **getPhrase** - Get phrase
 * **setWidth** - Image width, px (Optional, default 150px)
 * **setHeight** - Image height, px  (Optional, default 40px)
 * **setTextColor** - Text color  (Optional)
@@ -34,17 +34,27 @@
 * **setPixelPerFrame** - Window shift per frame, px  (Optional, default 15px)
 * **setDelayBetweenFrames** - Time between frames, ms)  (Optional, default 20ms)
 
-## Code
+### Code default
 
 ```php
-use Visavi\Captcha\PhraseBuilder;
-use Visavi\Captcha\CaptchaBuilder;
+header('Content-Type: image/gif');
+
+$captcha = new CaptchaBuilder();
+$_SESSION['captcha'] = $captcha->getPhrase();
+
+return $captcha->render();
+```
+
+### Code Advanced
+
+```php
+header('Content-Type: image/gif');
 
 $phrase = new PhraseBuilder();
 $phrase = $phrase->getPhrase(5, '1234567890');
 
-$captcha = new CaptchaBuilder();
-$captcha->setPhrase($phrase)
+$captcha = new CaptchaBuilder($phrase);
+$captcha
     ->setWidth(150)
     ->setHeight(50)
     ->setTextColor(0, 0, 0)
@@ -53,6 +63,8 @@ $captcha->setPhrase($phrase)
     ->setWindowWidth(60)
     ->setPixelPerFrame(15)
     ->setDelayBetweenFrames(20);
+
+$_SESSION['captcha'] = $captcha->getPhrase();
 
 return $captcha->render();
 ```

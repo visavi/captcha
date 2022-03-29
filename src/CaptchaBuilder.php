@@ -6,57 +6,21 @@ namespace Visavi\Captcha;
 
 class CaptchaBuilder
 {
-    /**
-     * @var array
-     */
-    protected $frames;
+    protected array $frames;
+    protected string $phrase;
+    protected int $width = 150;
+    protected int $height = 40;
+    protected string $font;
+    protected array|null $textColor = null;
+    protected array|null $backgroundColor = null;
+    protected int $windowWidth = 75;
+    protected int $pixelPerFrame = 15;
+    protected int $delayBetweenFrames = 20;
 
     /**
-     * @var string
+     * @param string|null $phrase
      */
-    protected $phrase;
-
-    /**
-     * @var int
-     */
-    protected $width = 150;
-
-    /**
-     * @var int
-     */
-    protected $height = 40;
-
-    /**
-     * @var string
-     */
-    protected $font;
-
-    /**
-     * @var array
-     */
-    protected $textColor;
-
-    /**
-     * @var array
-     */
-    protected $backgroundColor;
-
-    /**
-     * @var int
-     */
-    protected $windowWidth = 75;
-
-    /**
-     * @var int
-     */
-    protected $pixelPerFrame = 15;
-
-    /**
-     * @var int
-     */
-    protected $delayBetweenFrames = 20;
-
-    public function __construct($phrase = null)
+    public function __construct(?string $phrase = null)
     {
         if ($phrase) {
             $this->phrase = $phrase;
@@ -207,9 +171,7 @@ class CaptchaBuilder
             $delays[] = $this->delayBetweenFrames;
         }
 
-        $gif = new GifEncoder($this->frames, $delays, 0, 2);
-
-        return $gif->getAnimation();
+        return (new GifEncoder($this->frames, $delays, 0, 2))->getAnimation();
     }
 
     /**
@@ -332,7 +294,7 @@ class CaptchaBuilder
      *
      * @return false|int
      */
-    protected function createColor($image, array $color)
+    protected function createColor($image, array $color): bool|int
     {
         return imagecolorallocate($image, $color[0], $color[1], $color[2]);
     }
@@ -344,7 +306,7 @@ class CaptchaBuilder
      *
      * @return false|string
      */
-    protected function getImageContent($image)
+    protected function getImageContent($image): bool|string
     {
         ob_start();
         imagegif($image);

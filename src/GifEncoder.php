@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace Visavi\Captcha;
 
-use Exception;
+use RuntimeException;
 
 class GifEncoder
 {
     /* GIF header 6 bytes */
-    private $gif = 'GIF89a';
-    private $buf = [];
-    private $img = -1;
-    private $lop;
-    private $dis;
-    private $ofs;
-    private $col;
+    private string $gif = 'GIF89a';
+    private array $buf = [];
+    private int $img = -1;
+    private int $lop;
+    private int $dis;
+    private array $ofs;
+    private int $col;
 
     /**
      * GIF encoder
@@ -30,7 +30,7 @@ class GifEncoder
      * @param array  $ofs
      * @param string $mod
      *
-     * @throws Exception
+     * @throws RuntimeException
      */
     public function __construct(
         array $frames,
@@ -44,7 +44,7 @@ class GifEncoder
         string $mod = 'bin'
     ) {
         $this->lop = ($lop > -1) ? $lop : 0;
-        $this->dis = ($dis > -1) ? ($dis < 3 ? $dis : 3) : 2;
+        $this->dis = ($dis > -1) ? min($dis, 3) : 2;
         $this->col = ($red > -1 && $green > -1 && $blue > -1) ? ($red | ($green << 8) | ($blue << 16)) : -1;
         $this->ofs = $ofs;
 
@@ -55,18 +55,18 @@ class GifEncoder
             } elseif (strtolower($mod) === 'bin') {
                 $this->buf[] = $frames[$i];
             } else {
-                throw new Exception(sprintf('%s (%s)', 'Unintelligible flag!', $mod));
+                throw new RuntimeException(sprintf('%s (%s)', 'Unintelligible flag!', $mod));
             }
 
-            if (strpos($this->buf[$i], 'GIF87a') !== 0 && strpos($this->buf[$i], 'GIF89a') !== 0) {
-                throw new Exception(sprintf('%s (%d source)', 'Source is not a GIF image!', $i));
+            if (! str_starts_with($this->buf[$i], 'GIF87a') && ! str_starts_with($this->buf[$i], 'GIF89a')) {
+                throw new RuntimeException(sprintf('%s (%d source)', 'Source is not a GIF image!', $i));
             }
 
             for ($j = (13 + 3 * (2 << (ord($this->buf[$i][10]) & 0x07))), $k = true; $k; $j++) {
                 switch ($this->buf[$i][$j]) {
                     case '!':
                         if ((substr($this->buf[$i], ($j + 3), 8)) === 'NETSCAPE') {
-                            throw new Exception(sprintf(
+                            throw new RuntimeException(sprintf(
                                 '%s (%d source)',
                                 'Does not make animation from animated GIF source!',
                                 $i + 1

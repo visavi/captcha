@@ -4,36 +4,35 @@ declare(strict_types=1);
 
 namespace Visavi\Captcha;
 
+use GdImage;
+use RuntimeException;
+
 class CaptchaBuilder
 {
     protected array $frames;
+    protected array $params;
     protected string $phrase;
     protected int $width = 150;
     protected int $height = 40;
     protected string $font;
-    protected array|null $textColor = null;
-    protected array|null $backgroundColor = null;
+    protected ?array $textColor = null;
+    protected ?array $backgroundColor = null;
     protected int $windowWidth = 75;
     protected int $pixelPerFrame = 15;
     protected int $delayBetweenFrames = 20;
 
-    /**
-     * @param string|null $phrase
-     */
     public function __construct(?string $phrase = null)
     {
         if ($phrase) {
             $this->phrase = $phrase;
         } else {
             $phraseBuilder = new PhraseBuilder();
-            $this->phrase = $phraseBuilder->getPhrase(rand(4, 6));
+            $this->phrase = $phraseBuilder->getPhrase(random_int(4, 6));
         }
     }
 
     /**
      * Get phrase
-     *
-     * @return string
      */
     public function getPhrase(): string
     {
@@ -42,12 +41,6 @@ class CaptchaBuilder
 
     /**
      * Set text color
-     *
-     * @param int $r
-     * @param int $g
-     * @param int $b
-     *
-     * @return $this
      */
     public function setTextColor(int $r, int $g, int $b): self
     {
@@ -58,12 +51,6 @@ class CaptchaBuilder
 
     /**
      * Set background color
-     *
-     * @param int $r
-     * @param int $g
-     * @param int $b
-     *
-     * @return $this
      */
     public function setBackgroundColor(int $r, int $g, int $b): self
     {
@@ -74,10 +61,6 @@ class CaptchaBuilder
 
     /**
      * Set image width
-     *
-     * @param int $width
-     *
-     * @return $this
      */
     public function setWidth(int $width): self
     {
@@ -88,10 +71,6 @@ class CaptchaBuilder
 
     /**
      * Set image height
-     *
-     * @param int $height
-     *
-     * @return $this
      */
     public function setHeight(int $height): self
     {
@@ -102,10 +81,6 @@ class CaptchaBuilder
 
     /**
      * Set window width
-     *
-     * @param int $width
-     *
-     * @return $this
      */
     public function setWindowWidth(int $width): self
     {
@@ -116,10 +91,6 @@ class CaptchaBuilder
 
     /**
      * Set pixel per frame
-     *
-     * @param int $pixel
-     *
-     * @return $this
      */
     public function setPixelPerFrame(int $pixel): self
     {
@@ -129,25 +100,17 @@ class CaptchaBuilder
     }
 
     /**
-     * Set delay between frames
-     *
-     * @param int $microseconds
-     *
-     * @return $this
+     * Set delay between frames (in hundredths of a second, per GIF spec)
      */
-    public function setDelayBetweenFrames(int $microseconds): self
+    public function setDelayBetweenFrames(int $delay): self
     {
-        $this->delayBetweenFrames = $microseconds;
+        $this->delayBetweenFrames = $delay;
 
         return $this;
     }
 
     /**
      * Set font
-     *
-     * @param string $path
-     *
-     * @return $this
      */
     public function setFont(string $path): self
     {
@@ -159,8 +122,7 @@ class CaptchaBuilder
     /**
      * Render captcha
      *
-     * @return string
-     * @throws
+     * @throws RuntimeException
      */
     public function render(): string
     {
@@ -176,18 +138,14 @@ class CaptchaBuilder
 
     /**
      * Get captcha inline
-     *
-     * @return string
      */
     public function inline(): string
     {
-        return 'data:image/jpeg;base64,' . base64_encode($this->render());
+        return 'data:image/gif;base64,' . base64_encode($this->render());
     }
 
     /**
      * Returns gif frames
-     *
-     * @return array
      */
     public function getFrames(): array
     {
@@ -214,21 +172,42 @@ class CaptchaBuilder
     }
 
     /**
-     * Get image params
+     * Resolve the font path: a custom one if set, otherwise a random bundled font
      *
-     * @return array
+     * @throws RuntimeException
+     */
+    protected function resolveFont(): string
+    {
+        if (isset($this->font)) {
+            if (! is_file($this->font)) {
+                throw new RuntimeException('Font file not found: ' . $this->font);
+            }
+
+            return $this->font;
+        }
+
+        $fonts = glob(__DIR__ . '/../fonts/*.ttf') ?: [];
+
+        if (! $fonts) {
+            throw new RuntimeException('No bundled fonts found in ' . __DIR__ . '/../fonts');
+        }
+
+        return $fonts[random_int(0, count($fonts) - 1)];
+    }
+
+    /**
+     * Get image params
      */
     protected function getImageParams(): array
     {
-        static $params;
-
-        if (! $params) {
-            $params['font'] = $this->font ?? __DIR__ . '/../fonts/' . rand(0, 6) . '.ttf';
+        if (! isset($this->params)) {
+            $params = [];
+            $params['font'] = $this->resolveFont();
             $params['size'] = $this->width / max(strlen($this->phrase), 5);
 
             $box = imagettfbbox($params['size'], 0, $params['font'], $this->phrase);
 
-            $params['textWidth']  = $box[2] - $box[0];
+            $params['textWidth'] = $box[2] - $box[0];
             $params['textHeight'] = abs($box[7] + $box[1]);
 
             $params['x'] = (int) (($this->width - $params['textWidth']) / 2);
@@ -238,19 +217,17 @@ class CaptchaBuilder
             $params['backgroundColor'] = $this->backgroundColor ?? [rand(200, 255), rand(200, 255), rand(200, 255)];
 
             $params['negate'] = rand(0, 1);
+
+            $this->params = $params;
         }
 
-        return $params;
+        return $this->params;
     }
 
     /**
      * Apply some post effects
-     *
-     * @param resource $image
-     *
-     * @param array $params
      */
-    protected function applyEffect($image, array $params): void
+    protected function applyEffect(GdImage $image, array $params): void
     {
         if (! function_exists('imagefilter')) {
             return;
@@ -267,13 +244,11 @@ class CaptchaBuilder
 
     /**
      * Create a base image with the text
-     *
-     * @return resource
      */
-    protected function getBaseImage()
+    protected function getBaseImage(): GdImage
     {
         $params = $this->getImageParams();
-        $image  = imagecreatetruecolor($this->width, $this->height);
+        $image = imagecreatetruecolor($this->width, $this->height);
 
         // Background
         $backgroundColor = $this->createColor($image, $params['backgroundColor']);
@@ -288,25 +263,16 @@ class CaptchaBuilder
 
     /**
      * Create color
-     *
-     * @param resource $image
-     * @param array    $color
-     *
-     * @return false|int
      */
-    protected function createColor($image, array $color): bool|int
+    protected function createColor(GdImage $image, array $color): bool|int
     {
         return imagecolorallocate($image, $color[0], $color[1], $color[2]);
     }
 
     /**
      * Get image content
-     *
-     * @param resource $image
-     *
-     * @return false|string
      */
-    protected function getImageContent($image): bool|string
+    protected function getImageContent(GdImage $image): bool|string
     {
         ob_start();
         imagegif($image);

@@ -20,16 +20,6 @@ class GifEncoder
     /**
      * GIF encoder
      *
-     * @param array  $frames
-     * @param array  $delays
-     * @param int    $lop
-     * @param int    $dis
-     * @param int    $red
-     * @param int    $green
-     * @param int    $blue
-     * @param array  $ofs
-     * @param string $mod
-     *
      * @throws RuntimeException
      */
     public function __construct(
@@ -51,7 +41,13 @@ class GifEncoder
         $iMax = count($frames);
         for ($i = 0; $i < $iMax; $i++) {
             if (strtolower($mod) === 'url') {
-                $this->buf[] = fread(fopen($frames[$i], 'rb'), filesize($frames[$i]));
+                $content = file_get_contents($frames[$i]);
+
+                if ($content === false) {
+                    throw new RuntimeException(sprintf('%s (%d source)', 'Cannot read GIF source!', $i));
+                }
+
+                $this->buf[] = $content;
             } elseif (strtolower($mod) === 'bin') {
                 $this->buf[] = $frames[$i];
             } else {
@@ -105,20 +101,17 @@ class GifEncoder
 
     /**
      * Add frames
-     *
-     * @param int $i
-     * @param int $d
      */
     private function addFrames(int $i, int $d): void
     {
-        $localStr  = 13 + 3 * (2 << (ord($this->buf[$i][10]) & 0x07));
-        $localEnd  = strlen($this->buf[$i]) - $localStr - 1;
-        $localTmp  = substr($this->buf[$i], $localStr, $localEnd);
+        $localStr = 13 + 3 * (2 << (ord($this->buf[$i][10]) & 0x07));
+        $localEnd = strlen($this->buf[$i]) - $localStr - 1;
+        $localTmp = substr($this->buf[$i], $localStr, $localEnd);
         $globalLen = 2 << (ord($this->buf[0][10]) & 0x07);
-        $localLen  = 2 << (ord($this->buf[$i][10]) & 0x07);
+        $localLen = 2 << (ord($this->buf[$i][10]) & 0x07);
         $globalRgb = substr($this->buf[0], 13, 3 * (2 << (ord($this->buf[0][10]) & 0x07)));
-        $localRgb  = substr($this->buf[$i], 13, 3 * (2 << (ord($this->buf[$i][10]) & 0x07)));
-        $localExt  = "!\xF9\x04" . chr(($this->dis << 2) + 0) . chr(($d >> 0) & 0xFF) . chr(($d >> 8) & 0xFF) . "\x0\x0";
+        $localRgb = substr($this->buf[$i], 13, 3 * (2 << (ord($this->buf[$i][10]) & 0x07)));
+        $localExt = "!\xF9\x04" . chr(($this->dis << 2) + 0) . chr(($d >> 0) & 0xFF) . chr(($d >> 8) & 0xFF) . "\x0\x0";
 
         if ($this->col > -1 && ord($this->buf[$i][10]) & 0x80) {
             for ($j = 0; $j < (2 << (ord($this->buf[$i][10]) & 0x07)); $j++) {
@@ -181,12 +174,6 @@ class GifEncoder
 
     /**
      * Block compare
-     *
-     * @param string $globalBlock
-     * @param string $localBlock
-     * @param int    $len
-     *
-     * @return bool
      */
     private function blockCompare(string $globalBlock, string $localBlock, int $len): bool
     {
@@ -205,8 +192,6 @@ class GifEncoder
 
     /**
      * Get animation
-     *
-     * @return string
      */
     public function getAnimation(): string
     {

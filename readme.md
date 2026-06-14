@@ -25,6 +25,7 @@
 ## Methods
 
 * **getPhrase** - Get phrase
+* **inline** - Get captcha as a base64 data URI (image/gif), ready for an inline `<img src>`
 * **setWidth** - Image width, px (Optional, default 150px)
 * **setHeight** - Image height, px  (Optional, default 40px)
 * **setTextColor** - Text color  (Optional)
@@ -32,7 +33,7 @@
 * **setFont** - Font path  (Optional)
 * **setWindowWidth** - Window width, px  (Optional, default 75px)
 * **setPixelPerFrame** - Window shift per frame, px  (Optional, default 15px)
-* **setDelayBetweenFrames** - Time between frames, ms)  (Optional, default 20ms)
+* **setDelayBetweenFrames** - Time between frames, in hundredths of a second (Optional, default 20 = 0.2s)
 
 ### Code default
 
@@ -67,6 +68,17 @@ $captcha
 $_SESSION['captcha'] = $captcha->getPhrase();
 
 return $captcha->render();
+```
+
+### Code inline
+
+No headers needed — the captcha is embedded straight into the page:
+
+```php
+$captcha = new CaptchaBuilder();
+$_SESSION['captcha'] = $captcha->getPhrase();
+
+echo '<img src="' . $captcha->inline() . '" alt="captcha">';
 ```
 
 ## Installation

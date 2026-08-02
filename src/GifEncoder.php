@@ -11,78 +11,66 @@ class GifEncoder
     /* GIF header 6 bytes */
     private string $gif = 'GIF89a';
     private array $buf = [];
-    private int $img = -1;
+    private bool $first = true;
     private int $lop;
     private int $dis;
-    private array $ofs;
-    private int $col;
 
     /**
      * GIF encoder
      *
+     * @param array $frames Binary contents of the source gif images
+     * @param array $delays Frame delays, in hundredths of a second
+     * @param int   $lop    Loop count, 0 means forever
+     * @param int   $dis    Disposal method
+     *
      * @throws RuntimeException
      */
-    public function __construct(
-        array $frames,
-        array $delays,
-        int $lop,
-        int $dis,
-        int $red = 0,
-        int $green = 0,
-        int $blue = 0,
-        array $ofs = [],
-        string $mod = 'bin'
-    ) {
-        $this->lop = ($lop > -1) ? $lop : 0;
+    public function __construct(array $frames, array $delays, int $lop, int $dis)
+    {
+        $this->lop = max($lop, 0);
         $this->dis = ($dis > -1) ? min($dis, 3) : 2;
-        $this->col = ($red > -1 && $green > -1 && $blue > -1) ? ($red | ($green << 8) | ($blue << 16)) : -1;
-        $this->ofs = $ofs;
 
-        $iMax = count($frames);
-        for ($i = 0; $i < $iMax; $i++) {
-            if (strtolower($mod) === 'url') {
-                $content = file_get_contents($frames[$i]);
-
-                if ($content === false) {
-                    throw new RuntimeException(sprintf('%s (%d source)', 'Cannot read GIF source!', $i));
-                }
-
-                $this->buf[] = $content;
-            } elseif (strtolower($mod) === 'bin') {
-                $this->buf[] = $frames[$i];
-            } else {
-                throw new RuntimeException(sprintf('%s (%s)', 'Unintelligible flag!', $mod));
-            }
-
-            if (! str_starts_with($this->buf[$i], 'GIF87a') && ! str_starts_with($this->buf[$i], 'GIF89a')) {
+        foreach ($frames as $i => $frame) {
+            if (! str_starts_with($frame, 'GIF87a') && ! str_starts_with($frame, 'GIF89a')) {
                 throw new RuntimeException(sprintf('%s (%d source)', 'Source is not a GIF image!', $i));
             }
 
-            for ($j = (13 + 3 * (2 << (ord($this->buf[$i][10]) & 0x07))), $k = true; $k; $j++) {
-                switch ($this->buf[$i][$j]) {
-                    case '!':
-                        if ((substr($this->buf[$i], ($j + 3), 8)) === 'NETSCAPE') {
-                            throw new RuntimeException(sprintf(
-                                '%s (%d source)',
-                                'Does not make animation from animated GIF source!',
-                                $i + 1
-                            ));
-                        }
-                        break;
-                    case ';':
-                        $k = false;
-                        break;
-                }
-            }
+            $this->assertNotAnimated($frame, $i);
+
+            $this->buf[] = $frame;
         }
 
         $this->addHeader();
-        $iMax = count($this->buf);
-        for ($i = 0; $i < $iMax; $i++) {
-            $this->addFrames($i, $delays[$i]);
+
+        foreach ($this->buf as $i => $frame) {
+            $this->addFrames($i, $delays[$i] ?? 0);
         }
 
         $this->addFooter();
+    }
+
+    /**
+     * Reject sources that are animated themselves
+     *
+     * @throws RuntimeException
+     */
+    private function assertNotAnimated(string $frame, int $i): void
+    {
+        $length = strlen($frame);
+
+        for ($j = 13 + 3 * (2 << (ord($frame[10]) & 0x07)); $j < $length; $j++) {
+            if ($frame[$j] === ';') {
+                return;
+            }
+
+            if ($frame[$j] === '!' && substr($frame, $j + 3, 8) === 'NETSCAPE') {
+                throw new RuntimeException(sprintf(
+                    '%s (%d source)',
+                    'Does not make animation from animated GIF source!',
+                    $i + 1
+                ));
+            }
+        }
     }
 
     /**
@@ -109,22 +97,9 @@ class GifEncoder
         $localTmp = substr($this->buf[$i], $localStr, $localEnd);
         $globalLen = 2 << (ord($this->buf[0][10]) & 0x07);
         $localLen = 2 << (ord($this->buf[$i][10]) & 0x07);
-        $globalRgb = substr($this->buf[0], 13, 3 * (2 << (ord($this->buf[0][10]) & 0x07)));
-        $localRgb = substr($this->buf[$i], 13, 3 * (2 << (ord($this->buf[$i][10]) & 0x07)));
-        $localExt = "!\xF9\x04" . chr(($this->dis << 2) + 0) . chr(($d >> 0) & 0xFF) . chr(($d >> 8) & 0xFF) . "\x0\x0";
-
-        if ($this->col > -1 && ord($this->buf[$i][10]) & 0x80) {
-            for ($j = 0; $j < (2 << (ord($this->buf[$i][10]) & 0x07)); $j++) {
-                if (
-                    ord($localRgb[3 * $j + 0]) === (($this->col >> 16) & 0xFF)
-                    && ord($localRgb[3 * $j + 1]) === (($this->col >> 8) & 0xFF)
-                    && ord($localRgb[3 * $j + 2]) === (($this->col >> 0) & 0xFF)
-                ) {
-                    $localExt = "!\xF9\x04" . chr(($this->dis << 2) + 1) . chr(($d >> 0) & 0xFF) . chr(($d >> 8) & 0xFF) . chr($j) . "\x0";
-                    break;
-                }
-            }
-        }
+        $globalRgb = substr($this->buf[0], 13, 3 * $globalLen);
+        $localRgb = substr($this->buf[$i], 13, 3 * $localLen);
+        $localExt = "!\xF9\x04" . chr($this->dis << 2) . chr(($d >> 0) & 0xFF) . chr(($d >> 8) & 0xFF) . "\x0\x0";
 
         switch ($localTmp[0]) {
             case '!':
@@ -139,29 +114,23 @@ class GifEncoder
                 $localImg = $localTmp;
         }
 
-        if ($this->img > -1 && ord($this->buf[$i][10]) & 0x80) {
-            if ($globalLen === $localLen && $this->blockCompare($globalRgb, $localRgb, $globalLen)) {
-                $this->gif .= ($localExt . $localImg . $localTmp);
-            } else {
-                if ($this->ofs) {
-                    $localImg[1] = chr($this->ofs[$i][0] & 0xFF);
-                    $localImg[2] = chr(($this->ofs[$i][0] & 0xFF00) >> 8);
-                    $localImg[3] = chr($this->ofs[$i][1] & 0xFF);
-                    $localImg[4] = chr(($this->ofs[$i][1] & 0xFF00) >> 8);
-                }
+        // The first frame is described by the global color table written in the header
+        $samePalette = $globalLen === $localLen && $this->blockCompare($globalRgb, $localRgb, $globalLen);
 
-                $byte = ord($localImg[9]);
-                $byte |= 0x80;
-                $byte &= 0xF8;
-                $byte |= (ord($this->buf[$i][10]) & 0x07);
-                $localImg[9] = chr($byte);
-                $this->gif .= $localExt . $localImg . $localRgb . $localTmp;
-            }
+        if ($this->first || $samePalette || ! (ord($this->buf[$i][10]) & 0x80)) {
+            $this->gif .= $localExt . $localImg . $localTmp;
         } else {
-            $this->gif .= ($localExt . $localImg . $localTmp);
+            // Frame palette differs from the global one, so keep it as a local color table
+            $byte = ord($localImg[9]);
+            $byte |= 0x80;
+            $byte &= 0xF8;
+            $byte |= (ord($this->buf[$i][10]) & 0x07);
+            $localImg[9] = chr($byte);
+
+            $this->gif .= $localExt . $localImg . $localRgb . $localTmp;
         }
 
-        $this->img = 1;
+        $this->first = false;
     }
 
     /**

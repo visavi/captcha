@@ -4,23 +4,26 @@ declare(strict_types=1);
 
 namespace Visavi\Captcha;
 
+use Exception;
 use GdImage;
 use RuntimeException;
 
 class CaptchaBuilder
 {
-    protected array $frames;
-    protected array $params;
+    protected ?array $params = null;
     protected string $phrase;
     protected int $width = 150;
     protected int $height = 40;
-    protected string $font;
+    protected ?string $font = null;
     protected ?array $textColor = null;
     protected ?array $backgroundColor = null;
     protected int $windowWidth = 75;
     protected int $pixelPerFrame = 15;
     protected int $delayBetweenFrames = 20;
 
+    /**
+     * @throws Exception
+     */
     public function __construct(?string $phrase = null)
     {
         if ($phrase) {
@@ -45,6 +48,7 @@ class CaptchaBuilder
     public function setTextColor(int $r, int $g, int $b): self
     {
         $this->textColor = [$r, $g, $b];
+        $this->params = null;
 
         return $this;
     }
@@ -55,6 +59,7 @@ class CaptchaBuilder
     public function setBackgroundColor(int $r, int $g, int $b): self
     {
         $this->backgroundColor = [$r, $g, $b];
+        $this->params = null;
 
         return $this;
     }
@@ -65,6 +70,7 @@ class CaptchaBuilder
     public function setWidth(int $width): self
     {
         $this->width = $width;
+        $this->params = null;
 
         return $this;
     }
@@ -75,6 +81,7 @@ class CaptchaBuilder
     public function setHeight(int $height): self
     {
         $this->height = $height;
+        $this->params = null;
 
         return $this;
     }
@@ -85,6 +92,7 @@ class CaptchaBuilder
     public function setWindowWidth(int $width): self
     {
         $this->windowWidth = $width;
+        $this->params = null;
 
         return $this;
     }
@@ -115,6 +123,7 @@ class CaptchaBuilder
     public function setFont(string $path): self
     {
         $this->font = $path;
+        $this->params = null;
 
         return $this;
     }
@@ -122,22 +131,20 @@ class CaptchaBuilder
     /**
      * Render captcha
      *
-     * @throws RuntimeException
+     * @throws RuntimeException|Exception
      */
     public function render(): string
     {
-        $this->frames = $this->getFrames();
+        $frames = $this->getFrames();
+        $delays = array_fill(0, count($frames), $this->delayBetweenFrames);
 
-        $delays = [];
-        for ($i = 0, $iMax = count($this->frames); $i < $iMax; $i++) {
-            $delays[] = $this->delayBetweenFrames;
-        }
-
-        return (new GifEncoder($this->frames, $delays, 0, 2))->getAnimation();
+        return (new GifEncoder($frames, $delays, 0, 2))->getAnimation();
     }
 
     /**
      * Get captcha inline
+     *
+     * @throws RuntimeException|Exception
      */
     public function inline(): string
     {
@@ -146,22 +153,33 @@ class CaptchaBuilder
 
     /**
      * Returns gif frames
+     *
+     * @throws RuntimeException|Exception
      */
     public function getFrames(): array
     {
         $frames = [];
         $params = $this->getImageParams();
+        $base = $this->getBaseImage();
 
-        for ($i = -$this->windowWidth; $i < $this->width; $i += $this->pixelPerFrame) {
-            $image = $this->getBaseImage();
+        $window = $params['window'];
 
-            $foregroundColor = $this->createColor($image, $params['backgroundColor']);
+        // Even out the step so the last frame wraps back onto the first one
+        $count = max((int) round($this->width / $this->pixelPerFrame), 1);
 
-            // left foreground rectangle
-            imagefilledrectangle($image, 0, 0, $i, $this->height, $foregroundColor);
+        for ($frame = 0; $frame < $count; $frame++) {
+            // Start at the left edge of the text, so the first frame is never blank
+            $shift = $params['x'] + (int) round($frame * $this->width / $count);
+            $offset = (($shift % $this->width) + $this->width) % $this->width;
 
-            // right foreground rectangle
-            imagefilledrectangle($image, $i + $this->windowWidth, 0, $this->width, $this->height, $foregroundColor);
+            $image = imagecreatetruecolor($this->width, $this->height);
+
+            $backgroundColor = $this->createColor($image, $params['backgroundColor']);
+            imagefilledrectangle($image, 0, 0, $this->width, $this->height, $backgroundColor);
+
+            foreach ($this->getVisibleParts($offset, $window) as [$from, $to]) {
+                imagecopy($image, $base, $from, 0, $from, 0, $to - $from, $this->height);
+            }
 
             $this->applyEffect($image, $params);
 
@@ -174,11 +192,11 @@ class CaptchaBuilder
     /**
      * Resolve the font path: a custom one if set, otherwise a random bundled font
      *
-     * @throws RuntimeException
+     * @throws RuntimeException|Exception
      */
     protected function resolveFont(): string
     {
-        if (isset($this->font)) {
+        if ($this->font !== null) {
             if (! is_file($this->font)) {
                 throw new RuntimeException('Font file not found: ' . $this->font);
             }
@@ -197,13 +215,17 @@ class CaptchaBuilder
 
     /**
      * Get image params
+     *
+     * @throws RuntimeException|Exception
      */
     protected function getImageParams(): array
     {
-        if (! isset($this->params)) {
+        if ($this->params === null) {
             $params = [];
+            $characters = $this->getCharacters();
+
             $params['font'] = $this->resolveFont();
-            $params['size'] = $this->width / max(strlen($this->phrase), 5);
+            $params['size'] = $this->width / max(count($characters), 5);
 
             $box = imagettfbbox($params['size'], 0, $params['font'], $this->phrase);
 
@@ -213,15 +235,109 @@ class CaptchaBuilder
             $params['x'] = (int) (($this->width - $params['textWidth']) / 2);
             $params['y'] = (int) (($this->height + $params['textHeight']) / 2);
 
-            $params['textColor'] = $this->textColor ?? [rand(0, 150), rand(0, 150), rand(0, 150)];
-            $params['backgroundColor'] = $this->backgroundColor ?? [rand(200, 255), rand(200, 255), rand(200, 255)];
+            $params['window'] = $this->resolveWindowWidth($params);
 
-            $params['negate'] = rand(0, 1);
+            $params['textColor'] = $this->textColor ?? [random_int(0, 150), random_int(0, 150), random_int(0, 150)];
+            $params['backgroundColor'] = $this->backgroundColor ?? [random_int(200, 255), random_int(200, 255), random_int(200, 255)];
+
+            $params['negate'] = random_int(0, 1);
 
             $this->params = $params;
         }
 
         return $this->params;
+    }
+
+    /**
+     * Parts of the image the window shows at the given offset, wrapping around the right edge
+     */
+    protected function getVisibleParts(int $offset, int $window): array
+    {
+        $head = min($window, $this->width - $offset);
+        $parts = [[$offset, $offset + $head]];
+
+        if ($window > $head) {
+            $parts[] = [0, $window - $head];
+        }
+
+        return $parts;
+    }
+
+    /**
+     * Split the phrase into characters, multibyte aware
+     */
+    protected function getCharacters(): array
+    {
+        return preg_split('//u', $this->phrase, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    }
+
+    /**
+     * Horizontal bounds of every character of the phrase
+     */
+    protected function getCharacterRanges(array $params): array
+    {
+        $characters = $this->getCharacters();
+        $ranges = [];
+        $start = 0;
+
+        for ($i = 0, $length = count($characters); $i < $length; $i++) {
+            $prefix = implode('', array_slice($characters, 0, $i + 1));
+            $box = imagettfbbox($params['size'], 0, $params['font'], $prefix);
+            $end = $box[2] - $box[0];
+
+            $ranges[] = [$params['x'] + $start, $params['x'] + $end];
+            $start = $end;
+        }
+
+        return $ranges;
+    }
+
+    /**
+     * Shrink the window until no frame can show the whole phrase at once
+     */
+    protected function resolveWindowWidth(array $params): int
+    {
+        $ranges = $this->getCharacterRanges($params);
+        $window = min($this->windowWidth, $this->width);
+
+        while ($window > 1 && ! $this->hidesCharacter($window, $ranges)) {
+            $window--;
+        }
+
+        return $window;
+    }
+
+    /**
+     * Whether a window of the given width keeps at least one character fully hidden in every frame
+     */
+    protected function hidesCharacter(int $window, array $ranges): bool
+    {
+        for ($offset = 0; $offset < $this->width; $offset++) {
+            $parts = $this->getVisibleParts($offset, $window);
+            $hidden = false;
+
+            foreach ($ranges as [$start, $end]) {
+                $visible = false;
+
+                foreach ($parts as [$from, $to]) {
+                    if ($start < $to && $end > $from) {
+                        $visible = true;
+                        break;
+                    }
+                }
+
+                if (! $visible) {
+                    $hidden = true;
+                    break;
+                }
+            }
+
+            if (! $hidden) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -244,6 +360,8 @@ class CaptchaBuilder
 
     /**
      * Create a base image with the text
+     *
+     * @throws RuntimeException|Exception
      */
     protected function getBaseImage(): GdImage
     {
@@ -276,7 +394,6 @@ class CaptchaBuilder
     {
         ob_start();
         imagegif($image);
-        imagedestroy($image);
 
         return ob_get_clean();
     }
